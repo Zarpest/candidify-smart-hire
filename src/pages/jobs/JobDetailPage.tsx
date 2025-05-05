@@ -4,13 +4,14 @@ import MainLayout from '@/components/layout/MainLayout';
 import JobDetail from '@/components/jobs/JobDetail';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
-import { mockJobs } from '@/data/mockData';
+import { useJobsStore } from '@/data/jobsStore';
 
 const JobDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const getJobById = useJobsStore((state) => state.getJobById);
   
-  const job = mockJobs.find(job => job.id === id);
+  const job = id ? getJobById(id) : undefined;
   
   if (!job) {
     return (
