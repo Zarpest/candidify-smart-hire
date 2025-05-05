@@ -65,7 +65,7 @@ export default {
 				},
 				// Candidify custom colors
 				candidify: {
-					primary: '#4F46E5',
+					primary: '#278d46',
 					secondary: '#3B82F6',
 					accent: '#7C3AED',
 					light: '#EEF2FF',
