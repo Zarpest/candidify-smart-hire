@@ -13,14 +13,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Briefcase, Search } from 'lucide-react';
-import { mockJobs } from '@/data/mockData';
 import { Link } from 'react-router-dom';
+import { useJobsStore } from '@/data/jobsStore';
 
 const JobsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const jobs = useJobsStore((state) => state.jobs);
 
-  const filteredJobs = mockJobs.filter(job => {
+  const filteredJobs = jobs.filter(job => {
     const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          job.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          job.description.toLowerCase().includes(searchQuery.toLowerCase());

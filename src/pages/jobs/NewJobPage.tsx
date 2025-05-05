@@ -14,9 +14,11 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft, Plus, Trash } from 'lucide-react';
 import { toast } from 'sonner';
+import { useJobsStore } from '@/data/jobsStore';
 
 const NewJobPage = () => {
   const navigate = useNavigate();
+  const addJob = useJobsStore((state) => state.addJob);
   const [jobTitle, setJobTitle] = useState('');
   const [department, setDepartment] = useState('');
   const [location, setLocation] = useState('');
@@ -75,8 +77,18 @@ const NewJobPage = () => {
       return;
     }
 
-    // Here you would typically send the data to an API
-    // For now, we'll just show a success message and redirect
+    // Add the new job to the store
+    addJob({
+      title: jobTitle,
+      department,
+      location,
+      type: jobType,
+      description,
+      requirements: requirements.filter(req => req.description.trim() !== ''),
+      skills,
+      status: 'published',
+    });
+    
     toast.success("Oferta de empleo creada correctamente");
     navigate('/jobs');
   };
