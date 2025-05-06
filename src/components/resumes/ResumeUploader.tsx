@@ -1,26 +1,58 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { FileUp, File, CheckCircle2, X } from "lucide-react";
-
-interface UploadedFile {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-  uploaded: boolean;
-  error?: string;
-}
+import { FileUp, File, CheckCircle2, X, AlertCircle, FileText, Trash2 } from "lucide-react";
+import { useResumesStore, ResumeFile } from "@/data/resumesStore";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const ResumeUploader = () => {
-  const [files, setFiles] = useState<UploadedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const { toast } = useToast();
+
+  const { 
+    resumes, 
+    addResumes, 
+    updateResumeStatus, 
+    removeResume, 
+    clearResumes 
+  } = useResumesStore();
+
+  const pendingResumes = resumes.filter(r => r.status === 'pending' && r.uploaded);
+  const processingResumes = resumes.filter(r => r.status === 'processing');
+  const completedResumes = resumes.filter(r => r.status === 'completed');
+  const failedResumes = resumes.filter(r => r.status === 'failed');
+
+  useEffect(() => {
+    // Auto-start analysis if we have pending resumes and aren't already analyzing
+    if (pendingResumes.length > 0 && !analyzing) {
+      analyzeResumes();
+    }
+  }, [pendingResumes.length]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -49,17 +81,20 @@ const ResumeUploader = () => {
   };
 
   const handleFiles = (fileList: FileList) => {
+    const validExtensions = ['pdf', 'docx', 'doc', 'txt'];
+    
     const newFiles = Array.from(fileList)
       .filter(file => {
         const extension = file.name.split('.').pop()?.toLowerCase();
-        return extension === 'pdf' || extension === 'docx' || extension === 'doc' || extension === 'txt';
+        return extension && validExtensions.includes(extension);
       })
       .map(file => ({
         id: Math.random().toString(36).substring(2, 9),
         name: file.name,
         size: file.size,
         type: file.type,
-        uploaded: false
+        uploaded: false,
+        analyzed: false
       }));
     
     if (newFiles.length !== fileList.length) {
@@ -71,49 +106,144 @@ const ResumeUploader = () => {
     }
     
     if (newFiles.length > 0) {
-      setFiles(prev => [...prev, ...newFiles]);
+      addResumes(newFiles);
+      uploadFiles(newFiles.map(f => f.id));
     }
   };
 
-  const removeFile = (id: string) => {
-    setFiles(prev => prev.filter(file => file.id !== id));
-  };
-
-  const uploadFiles = () => {
-    if (files.length === 0 || files.every(file => file.uploaded)) return;
+  const uploadFiles = (fileIds: string[]) => {
+    if (fileIds.length === 0) return;
     
     setUploading(true);
     setUploadProgress(0);
     
-    // Simulación de carga
+    // Simulación de carga con progreso realista según el número de archivos
+    const totalSteps = Math.min(100, fileIds.length * 5); // 5 pasos por archivo, max 100
+    let currentStep = 0;
+    
     const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setUploading(false);
+      currentStep++;
+      const progress = Math.floor((currentStep / totalSteps) * 100);
+      
+      setUploadProgress(progress);
+      
+      if (progress >= 100) {
+        clearInterval(interval);
+        setUploading(false);
+        
+        // Marcar archivos como cargados
+        fileIds.forEach(id => {
+          updateResumeStatus(id, 'pending', false, { uploaded: true });
+        });
+        
+        toast({
+          title: "Carga completada",
+          description: `${fileIds.length} currículums cargados correctamente.`,
+        });
+      }
+    }, 100 + Math.floor(Math.random() * 100)); // Añadir algo de variación
+  };
+
+  const analyzeResumes = () => {
+    if (pendingResumes.length === 0 || analyzing) return;
+    
+    setAnalyzing(true);
+    
+    // Procesamiento por lotes para evitar problemas con muchos archivos
+    const batchSize = 10;
+    const totalBatches = Math.ceil(pendingResumes.length / batchSize);
+    let currentBatch = 0;
+    
+    const processBatch = () => {
+      if (currentBatch >= totalBatches) {
+        setAnalyzing(false);
+        toast({
+          title: "Análisis completado",
+          description: `${pendingResumes.length} currículums analizados correctamente.`,
+        });
+        return;
+      }
+      
+      const start = currentBatch * batchSize;
+      const end = Math.min(start + batchSize, pendingResumes.length);
+      const currentBatchFiles = pendingResumes.slice(start, end);
+      
+      currentBatchFiles.forEach((resume, idx) => {
+        // Marcar como procesando
+        updateResumeStatus(resume.id, 'processing');
+        
+        // Simular un análisis con tiempos ligeramente diferentes para cada archivo
+        const delay = 500 + Math.floor(Math.random() * 1500) + (idx * 200);
+        
+        setTimeout(() => {
+          // Simular éxito con alta probabilidad o fallo con baja probabilidad
+          const success = Math.random() > 0.05;
           
-          // Marcar archivos como cargados
-          setFiles(prev => prev.map(file => ({
-            ...file,
-            uploaded: true
-          })));
+          if (success) {
+            // Simulación de resultados del análisis
+            updateResumeStatus(resume.id, 'completed', true, {
+              matchScore: Math.floor(Math.random() * 100),
+              keywords: ['JavaScript', 'TypeScript', 'React', 'Node.js'].filter(() => Math.random() > 0.5),
+            });
+          } else {
+            updateResumeStatus(resume.id, 'failed', false, {
+              error: "Error en el análisis del archivo. Formato incompatible o documento dañado."
+            });
+          }
           
-          toast({
-            title: "Carga completada",
-            description: `${files.filter(f => !f.uploaded).length} currículums cargados correctamente.`,
-          });
-          
-          return 100;
-        }
-        return prev + 5;
+          // Si este es el último archivo del lote, procesar el siguiente lote
+          if (idx === currentBatchFiles.length - 1) {
+            currentBatch++;
+            setTimeout(processBatch, 500);
+          }
+        }, delay);
       });
-    }, 200);
+    };
+    
+    // Iniciar procesamiento por lotes
+    processBatch();
   };
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / 1048576).toFixed(1)} MB`;
+  };
+  
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  const getStatusBadge = (resume: ResumeFile) => {
+    switch (resume.status) {
+      case 'pending':
+        return <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200">Pendiente</Badge>;
+      case 'processing':
+        return <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200">Procesando</Badge>;
+      case 'completed':
+        return <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">Completado</Badge>;
+      case 'failed':
+        return <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200">Fallido</Badge>;
+      default:
+        return <Badge variant="outline">Desconocido</Badge>;
+    }
+  };
+  
+  const handleRetryAnalysis = (id: string) => {
+    updateResumeStatus(id, 'pending');
+  };
+  
+  const handleClearConfirmation = () => {
+    setConfirmClear(true);
+  };
+  
+  const handleClearAll = () => {
+    clearResumes();
+    setConfirmClear(false);
+    toast({
+      title: "Lista limpiada",
+      description: "Todos los currículums han sido eliminados."
+    });
   };
 
   return (
@@ -128,7 +258,7 @@ const ResumeUploader = () => {
         <CardContent>
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center ${
-              dragActive ? "border-candidify-primary bg-candidify-light" : "border-border"
+              dragActive ? "border-primary bg-primary/5" : "border-border"
             }`}
             onDragEnter={handleDrag}
             onDragOver={handleDrag}
@@ -158,91 +288,143 @@ const ResumeUploader = () => {
         </CardContent>
       </Card>
 
-      {files.length > 0 && (
+      {resumes.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle>Archivos a cargar</CardTitle>
-            <CardDescription>
-              {files.filter(f => f.uploaded).length} de {files.length} archivos cargados
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Currículums</CardTitle>
+              <CardDescription>
+                {resumes.filter(r => r.uploaded).length} archivos cargados, {completedResumes.length} analizados
+              </CardDescription>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleClearConfirmation} 
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Limpiar todo
+            </Button>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {files.map((file) => (
-                <div key={file.id} className="flex items-center justify-between bg-muted/50 p-3 rounded-md">
-                  <div className="flex items-center">
-                    <div className={`p-2 rounded-md mr-3 ${file.uploaded ? "bg-green-100" : "bg-slate-100"}`}>
-                      {file.uploaded ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <File className="h-5 w-5 text-slate-600" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm line-clamp-1">{file.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatFileSize(file.size)} • {file.type.split("/")[1]}
-                      </p>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={() => removeFile(file.id)}>
-                    <X className="h-4 w-4" />
-                  </Button>
+            {uploading && (
+              <div className="mb-6">
+                <div className="flex justify-between text-sm mb-1">
+                  <span>Subiendo archivos</span>
+                  <span>{uploadProgress}%</span>
                 </div>
-              ))}
-
-              {uploading && (
-                <div className="mt-4">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>Progreso de carga</span>
-                    <span>{uploadProgress}%</span>
-                  </div>
-                  <Progress value={uploadProgress} className="h-2" />
-                </div>
-              )}
-
-              <div className="flex justify-end space-x-2 mt-4">
-                <Button variant="outline" onClick={() => setFiles([])}>
-                  Limpiar todo
-                </Button>
-                <Button 
-                  onClick={uploadFiles}
-                  disabled={uploading || files.length === 0 || files.every(f => f.uploaded)}
-                >
-                  {uploading ? "Cargando..." : "Cargar archivos"}
-                </Button>
+                <Progress value={uploadProgress} className="h-2" />
               </div>
+            )}
+            
+            {analyzing && processingResumes.length > 0 && (
+              <div className="mb-6 p-4 bg-muted rounded-md">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="relative w-6 h-6">
+                    <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                  </div>
+                  <span className="font-medium">
+                    Analizando {processingResumes.length} de {pendingResumes.length + processingResumes.length} currículums...
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  El análisis de grandes volúmenes de currículums puede tomar varios minutos. No cierre esta página.
+                </p>
+              </div>
+            )}
+            
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Archivo</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Subido</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {resumes.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-6">
+                        No hay currículums cargados
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    resumes.map((resume) => (
+                      <TableRow key={resume.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <p className="font-medium text-sm line-clamp-1">{resume.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatFileSize(resume.size)}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(resume)}
+                          {resume.error && (
+                            <p className="text-xs text-destructive mt-1">{resume.error}</p>
+                          )}
+                          {resume.status === 'completed' && resume.matchScore !== undefined && (
+                            <p className="text-xs text-muted-foreground mt-1">Match: {resume.matchScore}%</p>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatDate(resume.uploadedAt)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            {resume.status === 'failed' && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => handleRetryAnalysis(resume.id)}
+                                className="h-8 w-8"
+                              >
+                                <AlertCircle className="h-4 w-4" />
+                                <span className="sr-only">Reintentar</span>
+                              </Button>
+                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => removeResume(resume.id)}
+                              className="h-8 w-8"
+                            >
+                              <X className="h-4 w-4" />
+                              <span className="sr-only">Eliminar</span>
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </CardContent>
         </Card>
       )}
-
-      {files.some(f => f.uploaded) && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Análisis de Currículums</CardTitle>
-            <CardDescription>
-              Procesando contenido con IA para extraer información
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="p-6 text-center space-y-4">
-              <div className="relative w-16 h-16 mx-auto">
-                <div className="absolute inset-0 rounded-full border-4 border-candidify-light"></div>
-                <div className="absolute inset-0 rounded-full border-4 border-t-candidify-primary animate-spin"></div>
-              </div>
-              <h3 className="text-lg font-medium">Análisis en progreso</h3>
-              <p className="text-sm text-muted-foreground">
-                La IA está analizando y extrayendo información de {files.filter(f => f.uploaded).length} currículums. 
-                Esto puede tomar unos minutos.
-              </p>
-              <div className="w-full max-w-md mx-auto bg-muted rounded-full h-2.5 mt-2">
-                <div className="bg-gradient-to-r from-candidify-primary to-candidify-accent h-2.5 rounded-full w-3/4 animate-pulse-slow"></div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      
+      <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará todos los currículums cargados y no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearAll}>Eliminar todo</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

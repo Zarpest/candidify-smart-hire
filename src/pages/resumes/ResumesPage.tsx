@@ -4,8 +4,13 @@ import ResumeUploader from '@/components/resumes/ResumeUploader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, CheckSquare, ListChecks } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useResumesStore } from '@/data/resumesStore';
 
 const ResumesPage = () => {
+  const resumes = useResumesStore((state) => state.resumes);
+  const analyzedCount = resumes.filter(r => r.analyzed).length;
+  const failedCount = resumes.filter(r => r.status === 'failed').length;
+  
   return (
     <MainLayout>
       <div className="mb-6">
@@ -13,6 +18,26 @@ const ResumesPage = () => {
         <p className="text-muted-foreground">
           Carga currículums y deja que la IA los analice para ti
         </p>
+        
+        {resumes.length > 0 && (
+          <div className="mt-4 flex gap-3">
+            <Badge variant="outline" className="bg-muted/50 px-3 py-1">
+              <FileText className="h-4 w-4 mr-1" /> 
+              {resumes.length} currículums cargados
+            </Badge>
+            {analyzedCount > 0 && (
+              <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200 px-3 py-1">
+                <CheckSquare className="h-4 w-4 mr-1" /> 
+                {analyzedCount} analizados
+              </Badge>
+            )}
+            {failedCount > 0 && (
+              <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 px-3 py-1">
+                {failedCount} fallidos
+              </Badge>
+            )}
+          </div>
+        )}
       </div>
       
       <div className="grid gap-6 mb-6">
@@ -72,34 +97,34 @@ const ResumesPage = () => {
             </div>
             
             <div>
-              <h3 className="text-lg font-medium mb-2">Recomendaciones para los candidatos</h3>
+              <h3 className="text-lg font-medium mb-2">Recomendaciones para volúmenes grandes</h3>
               <div className="space-y-2">
                 <div className="flex items-start gap-2">
                   <ListChecks className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Estructura clara</p>
-                    <p className="text-sm text-muted-foreground">Secciones bien definidas para experiencia, educación y habilidades</p>
+                    <p className="font-medium">Carga por lotes</p>
+                    <p className="text-sm text-muted-foreground">Para procesamiento óptimo, cargue los currículums en lotes de 20-30 archivos</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <ListChecks className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Palabras clave relevantes</p>
-                    <p className="text-sm text-muted-foreground">Incluir términos específicos del sector y habilidades mencionadas en la oferta</p>
+                    <p className="font-medium">Mantenga la página abierta</p>
+                    <p className="text-sm text-muted-foreground">No cierre la página durante el análisis para evitar interrupciones</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <ListChecks className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Formato estándar</p>
-                    <p className="text-sm text-muted-foreground">Evitar diseños muy complejos que dificulten la extracción de información</p>
+                    <p className="font-medium">Revise regularmente</p>
+                    <p className="text-sm text-muted-foreground">Supervise el progreso y verifique si hay archivos que requieran reprocesamiento</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <ListChecks className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-medium">Información cuantificable</p>
-                    <p className="text-sm text-muted-foreground">Incluir logros medibles y resultados concretos en la experiencia laboral</p>
+                    <p className="font-medium">Asegure buena conexión</p>
+                    <p className="text-sm text-muted-foreground">Una conexión estable a internet evitará interrupciones durante la carga</p>
                   </div>
                 </div>
               </div>
