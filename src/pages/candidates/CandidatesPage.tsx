@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import KanbanBoard from '@/components/candidates/KanbanBoard';
 import { Button } from '@/components/ui/button';
@@ -13,8 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Search, SlidersHorizontal, Users } from 'lucide-react';
-import { mockCandidates, mockJobs } from '@/data/mockData';
-import {
+import { 
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -22,12 +21,34 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { useCandidatesStore } from '@/data/candidatesStore';
+import { useJobsStore } from '@/data/jobsStore';
+import { Link } from 'react-router-dom';
+import { useResumesStore } from '@/data/resumesStore';
+import { toast } from '@/components/ui/use-toast';
 
 const CandidatesPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedJob, setSelectedJob] = useState('all');
   
-  const filteredCandidates = mockCandidates.filter(candidate => {
+  const jobs = useJobsStore((state) => state.jobs);
+  const candidates = useCandidatesStore((state) => state.candidates);
+  const syncCandidatesFromResumes = useCandidatesStore((state) => state.syncCandidatesFromResumes);
+  const resumes = useResumesStore((state) => state.resumes);
+  
+  // Sincronizar candidatos al cargar la página
+  useEffect(() => {
+    syncCandidatesFromResumes();
+  }, [syncCandidatesFromResumes]);
+  
+  // Contar resúmenes analizados que no son candidatos aún
+  const analyzedResumesCount = resumes.filter(r => 
+    r.analyzed && 
+    r.status === 'completed' && 
+    !candidates.some(c => c.id === `candidate-${r.id}`)
+  ).length;
+  
+  const filteredCandidates = candidates.filter(candidate => {
     const matchesSearch = candidate.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           candidate.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           candidate.skills.some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -36,6 +57,46 @@ const CandidatesPage = () => {
     
     return matchesSearch && matchesJob;
   });
+
+  const handleConvertResumes = () => {
+    if (selectedJob === 'all') {
+      toast({
+        title: "Selecciona una oferta",
+        description: "Debes seleccionar una oferta de empleo específica para convertir los currículums a candidatos.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Obtener los resumenes analizados que no son candidatos aún
+    const resumesToConvert = resumes.filter(r => 
+      r.analyzed && 
+      r.status === 'completed' && 
+      !candidates.some(c => c.id === `candidate-${r.id}`)
+    );
+    
+    if (resumesToConvert.length === 0) {
+      toast({
+        title: "No hay currículums para convertir",
+        description: "No hay currículums analizados disponibles para convertir a candidatos.",
+      });
+      return;
+    }
+    
+    // Convertir resúmenes a candidatos
+    useResumesStore.getState().convertResumeToCandidates(
+      resumesToConvert.map(r => r.id),
+      selectedJob
+    );
+    
+    // Sincronizar para actualizar la lista de candidatos
+    syncCandidatesFromResumes();
+    
+    toast({
+      title: "Currículums convertidos",
+      description: `${resumesToConvert.length} currículums han sido convertidos a candidatos.`,
+    });
+  };
 
   return (
     <MainLayout>
@@ -46,12 +107,24 @@ const CandidatesPage = () => {
             Gestiona y evalúa a tus candidatos en un solo lugar
           </p>
         </div>
-        <Button asChild>
-          <a href="/resumes">
-            <Users className="mr-2 h-4 w-4" />
-            Cargar CV
-          </a>
-        </Button>
+        <div className="flex gap-2">
+          {analyzedResumesCount > 0 && (
+            <Button 
+              variant="outline" 
+              onClick={handleConvertResumes}
+              disabled={selectedJob === 'all'}
+            >
+              <Users className="mr-2 h-4 w-4" />
+              Convertir {analyzedResumesCount} CV a candidatos
+            </Button>
+          )}
+          <Button asChild>
+            <Link to="/resumes">
+              <Users className="mr-2 h-4 w-4" />
+              Cargar CV
+            </Link>
+          </Button>
+        </div>
       </div>
       
       <div className="flex flex-col sm:flex-row gap-4 mb-6 items-center">
@@ -75,7 +148,7 @@ const CandidatesPage = () => {
           <SelectContent>
             <SelectGroup>
               <SelectItem value="all">Todas las ofertas</SelectItem>
-              {mockJobs.map(job => (
+              {jobs.map(job => (
                 <SelectItem key={job.id} value={job.id}>
                   {job.title}
                 </SelectItem>
@@ -146,11 +219,20 @@ const CandidatesPage = () => {
           <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium mb-2">No se encontraron candidatos</h3>
           <p className="text-muted-foreground mb-4">
-            No hay candidatos que coincidan con tus criterios de búsqueda.
+            {searchQuery || selectedJob !== 'all'
+              ? "No hay candidatos que coincidan con tus criterios de búsqueda."
+              : "Aún no hay candidatos registrados."}
           </p>
-          <Button asChild>
-            <a href="/resumes">Cargar currículums</a>
-          </Button>
+          {analyzedResumesCount > 0 ? (
+            <div className="flex flex-col gap-3 items-center">
+              <p>Tienes {analyzedResumesCount} currículums analizados disponibles para convertir en candidatos.</p>
+              <Button onClick={handleConvertResumes}>Convertir CV a candidatos</Button>
+            </div>
+          ) : (
+            <Button asChild>
+              <Link to="/resumes">Cargar currículums</Link>
+            </Button>
+          )}
         </div>
       ) : (
         <KanbanBoard candidates={filteredCandidates} />

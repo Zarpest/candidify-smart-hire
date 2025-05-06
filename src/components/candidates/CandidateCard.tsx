@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Candidate, CandidateStage } from "@/types";
 import { FileText, Mail, MapPin, Phone } from "lucide-react";
+import { useResumesStore } from "@/data/resumesStore";
 
 interface CandidateCardProps {
   candidate: Candidate;
@@ -33,9 +34,14 @@ const stageNames: Record<CandidateStage, string> = {
 };
 
 const CandidateCard = ({ candidate, onClick }: CandidateCardProps) => {
+  // Obtener el resumen asociado al candidato si existe
+  const candidateIdParts = candidate.id.split('-');
+  const resumeId = candidateIdParts.length > 1 ? candidateIdParts[1] : null;
+  const resume = resumeId ? useResumesStore(state => state.getResumeById(resumeId)) : null;
+  
   return (
     <Card 
-      className="kanban-card hover:border-candidify-primary transition-all"
+      className="kanban-card hover:border-candidify-primary transition-all cursor-pointer"
       onClick={onClick}
     >
       <CardHeader className="p-4 pb-2">
@@ -62,7 +68,7 @@ const CandidateCard = ({ candidate, onClick }: CandidateCardProps) => {
           </div>
           <div className="flex items-center text-sm text-muted-foreground">
             <FileText className="mr-2 h-4 w-4" />
-            <span>Ver currículum</span>
+            <span>{resume ? resume.name : "Ver currículum"}</span>
           </div>
         </div>
         <div className="mt-4">

@@ -1,6 +1,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { CandidateStage } from "@/types";
 
 export interface ResumeFile {
   id: string;
@@ -15,15 +16,18 @@ export interface ResumeFile {
   analyzedAt?: string;
   matchScore?: number;
   keywords?: string[];
+  jobId?: string;
+  candidateId?: string;
 }
 
 interface ResumesState {
   resumes: ResumeFile[];
-  addResumes: (files: Omit<ResumeFile, "uploadedAt" | "status" | "analyzed">[]) => void;
+  addResumes: (files: Omit<ResumeFile, "uploadedAt" | "status" | "analyzed">[]) => ResumeFile[];
   updateResumeStatus: (id: string, status: ResumeFile['status'], analyzed?: boolean, extraData?: Partial<ResumeFile>) => void;
   removeResume: (id: string) => void;
   clearResumes: () => void;
   getResumeById: (id: string) => ResumeFile | undefined;
+  convertResumeToCandidates: (resumeIds: string[], jobId: string) => void;
 }
 
 export const useResumesStore = create<ResumesState>()(
@@ -75,6 +79,21 @@ export const useResumesStore = create<ResumesState>()(
       getResumeById: (id) => {
         return get().resumes.find(resume => resume.id === id);
       },
+
+      convertResumeToCandidates: (resumeIds, jobId) => {
+        // Este método añade el jobId a los resúmenes y marca que deben convertirse en candidatos
+        set((state) => ({
+          resumes: state.resumes.map(resume => 
+            resumeIds.includes(resume.id) 
+              ? { 
+                  ...resume, 
+                  jobId,
+                  candidateId: `candidate-${resume.id}` // Esto es para vincularlo con un candidato después
+                }
+              : resume
+          )
+        }));
+      }
     }),
     {
       name: "resumes-storage",
